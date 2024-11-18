@@ -48,17 +48,34 @@ suspend fun insertItemsBatch(batch: List<Map<String, String>>): String {
 
 // Clearing the container
 suspend fun clearContainer() {
+    println("Preparing for container cleaning.")
+    var deletedCount = 0
     try {
         val query = "SELECT * FROM c"
         val items = container.queryItems(query, CosmosQueryRequestOptions(), Map::class.java)
         items.forEach { item ->
             container.deleteItem(item["id"] as String, PartitionKey(item["name"] as String), CosmosItemRequestOptions())
+            deletedCount++
         }
-        println("Container cleared successfully.")
+        println("Container cleared successfully. Deleted $deletedCount items.")
     } catch (e: Exception) {
         println("Failed to clear container due to error: ${e.message}")
     }
 }
+
+suspend fun getItemCount(): Int {
+    return try {
+        val query = "SELECT VALUE COUNT(1) FROM c"
+        val countResult = container.queryItems(query, CosmosQueryRequestOptions(), Int::class.java)
+        val count = countResult.firstOrNull() ?: 0
+        println("Total items in container at the moment: $count")
+        count
+    } catch (e: Exception) {
+        println("Failed to get item count due to error: ${e.message}")
+        0
+    }
+}
+
 
 // Asynchronous writing and clearing
 fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking {
@@ -67,11 +84,13 @@ fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking
     }
 
     clearContainer()
+    var insertCount = 0
 
     val totalTimeMs = measureTimeMillis {
         coroutineScope {
             val batchJobs = items.chunked(batchSize).map { batch ->
                 async(Dispatchers.IO) {
+                    insertCount++
                     insertItemsBatch(batch)
                 }
             }
@@ -80,8 +99,10 @@ fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking
     }
 
     println("\nTotal time for inserting $numRecords records: $totalTimeMs ms")
+    println("Total insert batch operations: $insertCount")
 
-    clearContainer()
+    getItemCount()
+
 }
 
 fun main() {
