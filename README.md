@@ -2,15 +2,28 @@
 
 ## Project Description
 
-This project demonstrates how to perform batch insertion of data into an Azure Cosmos DB database using Kotlin and coroutines. It includes functionalities for clearing the container, inserting data asynchronously in batches, and measuring performance through execution time and throughput.
+This project demonstrates how to perform batch insertion of data into an Azure Cosmos DB database using Kotlin and coroutines. It includes functionalities for clearing the container, inserting data asynchronously in batches, and measuring performance through execution time and throughput. Additionally, it introduces a structured data model `AccountData` for insertion, ensuring efficient and realistic data operations.
 
 ## Execution Steps
 
 1. Connect to the Cosmos DB database using environment variables.
 2. Clear the container to remove existing data.
-3. Batch insert data into the container.
+3. Batch insert data into the container using the `AccountData` model.
 4. Retrieve the total item count in the container.
 5. Clear the container again after data insertion for cleanup.
+
+## Data Model
+
+The data being inserted is based on the `AccountData` model. This model includes the following fields:
+
+- **id**: Unique identifier for the record (UUID).
+- **account**: Partition key used for batch operations.
+- **balance**: A randomly generated balance between 1000.0 and 5000.0.
+- **description**: A description for the document.
+- **time**: Current system timestamp.
+- **timec**: Timestamp for record creation.
+- **pid**: A unique identifier for the process.
+- **randomValue**: A randomly generated integer between -10,000 and 10,001.
 
 ## Required Resources
 
@@ -78,5 +91,9 @@ The default execution inserts 1000 records into the Cosmos DB container in batch
 
 ```kotlin
 fun main() {
-    writeAndClearDataConcurrently(1000, 100) // Inserts 1000 records in batches of 100
+    writeData(1000, 100) // Inserts 1000 records in batches of 100
 }
+
+### Notes
+
+Ensure that the partition key (account) is consistent within each batch for successful insertion.
