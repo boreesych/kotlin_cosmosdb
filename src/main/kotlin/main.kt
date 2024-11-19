@@ -6,8 +6,10 @@ import kotlin.system.measureTimeMillis
 // Settings for connecting to Cosmos DB via environment variables
 val COSMOS_URL: String = System.getenv("COSMOS_URL") ?: throw IllegalArgumentException("COSMOS_URL environment variable not set")
 val COSMOS_KEY: String = System.getenv("COSMOS_KEY") ?: throw IllegalArgumentException("COSMOS_KEY environment variable not set")
-val DATABASE_NAME: String = System.getenv("DATABASE_NAME") ?: "ToDoList"
-val CONTAINER_NAME: String = System.getenv("CONTAINER_NAME") ?: "Items"
+val DATABASE_NAME: String = System.getenv("DATABASE_NAME") ?: throw IllegalArgumentException("DATABASE_NAME environment variable not set")
+val CONTAINER_NAME: String = System.getenv("CONTAINER_NAME") ?: throw IllegalArgumentException("CONTAINER_NAME environment variable not set")
+val recordQuantity = System.getenv("RECORD_QUANTITY")?.toInt() ?: 1000
+val batchSize = System.getenv("BATCH_SIZE")?.toInt() ?: 100
 
 // Creating a client and connecting to the database and container
 val cosmosClient = CosmosClientBuilder()
@@ -48,7 +50,7 @@ suspend fun insertItemsBatch(batch: List<Map<String, String>>): String {
 
 // Clearing the container
 suspend fun clearContainer() {
-    println("Preparing for container cleaning.")
+    println("Preparing for container cleaning. It will take 1-2 minutes.")
     var deletedCount = 0
     try {
         val query = "SELECT * FROM c"
@@ -97,14 +99,17 @@ fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking
             batchJobs.forEach { job -> println(job.await()) }
         }
     }
-
-    println("\nTotal time for inserting $numRecords records: $totalTimeMs ms")
+    
     println("Total insert batch operations: $insertCount")
+    println("\nTotal time for inserting $numRecords records: $totalTimeMs ms")
+
+    val itemsPerSecond = (numRecords / (totalTimeMs / 1000.0)).toInt()
+    println("TPS: $itemsPerSecond")
 
     getItemCount()
 
 }
 
 fun main() {
-    writeAndClearDataConcurrently(1000, 100) // 1000 records, in batches of 100
+    writeAndClearDataConcurrently(recordQuantity, batchSize)
 }
