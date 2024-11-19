@@ -93,6 +93,7 @@ The default execution inserts 1000 records into the Cosmos DB container in batch
 fun main() {
     writeData(1000, 100) // Inserts 1000 records in batches of 100
 }
+```
 
 ### Notes
 
