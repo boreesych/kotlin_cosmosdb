@@ -1,6 +1,8 @@
 import com.azure.cosmos.*
 import com.azure.cosmos.models.*
 import kotlinx.coroutines.*
+import java.util.*
+import kotlin.random.Random
 import kotlin.system.measureTimeMillis
 
 // Settings for connecting to Cosmos DB via environment variables
@@ -21,16 +23,23 @@ val cosmosClient = CosmosClientBuilder()
 val database = cosmosClient.getDatabase(DATABASE_NAME)
 val container = database.getContainer(CONTAINER_NAME)
 
-// Example data to be written
-val dataTemplate = mapOf(
-    "id" to "",
-    "name" to "Example Item"
+// Data model
+data class AccountData(
+    val id: String = UUID.randomUUID().toString(),
+    val account: String = UUID.randomUUID().toString(),
+    val balance: Double = Random.nextDouble(1000.0, 5000.0),
+    val time: Long = System.currentTimeMillis()
 )
 
+// Function to generate a single record
+fun generateRandomData(): AccountData {
+    return AccountData()
+}
+
 // Batch insertion of data
-suspend fun insertItemsBatch(batch: List<Map<String, String>>): String {
+suspend fun insertItemsBatch(batch: List<AccountData>): String {
     return try {
-        val partitionKey = batch.first()["name"] ?: throw IllegalArgumentException("Partition key cannot be null")
+        val partitionKey = batch.first().account
 
         val transactionalBatch = CosmosBatch.createCosmosBatch(PartitionKey(partitionKey))
         batch.forEach { item ->
@@ -56,7 +65,7 @@ suspend fun clearContainer() {
         val query = "SELECT * FROM c"
         val items = container.queryItems(query, CosmosQueryRequestOptions(), Map::class.java)
         items.forEach { item ->
-            container.deleteItem(item["id"] as String, PartitionKey(item["name"] as String), CosmosItemRequestOptions())
+            container.deleteItem(item["id"] as String, PartitionKey(item["account"] as String), CosmosItemRequestOptions())
             deletedCount++
         }
         println("Container cleared successfully. Deleted $deletedCount items.")
@@ -65,6 +74,7 @@ suspend fun clearContainer() {
     }
 }
 
+// Function to get item count in the container
 suspend fun getItemCount(): Int {
     return try {
         val query = "SELECT VALUE COUNT(1) FROM c"
@@ -78,12 +88,9 @@ suspend fun getItemCount(): Int {
     }
 }
 
-
 // Asynchronous writing and clearing
 fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking {
-    val items = (0 until numRecords).map { i ->
-        dataTemplate.toMutableMap().apply { this["id"] = i.toString() }
-    }
+    val items = (0 until numRecords).map { generateRandomData() }
 
     clearContainer()
     var insertCount = 0
@@ -99,7 +106,7 @@ fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking
             batchJobs.forEach { job -> println(job.await()) }
         }
     }
-    
+
     println("Total insert batch operations: $insertCount")
     println("\nTotal time for inserting $numRecords records: $totalTimeMs ms")
 
@@ -107,9 +114,9 @@ fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking
     println("TPS: $itemsPerSecond")
 
     getItemCount()
-
 }
 
+// Main function
 fun main() {
     writeAndClearDataConcurrently(recordQuantity, batchSize)
 }
