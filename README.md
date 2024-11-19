@@ -1,15 +1,16 @@
-# Cosmos DB Batch Insertion Project by Evgenii Bartenev
+# Cosmos DB Batch Insertion by Evgenii Bartenev
 
 ## Project Description
 
-This project demonstrates how to perform batch insertion of data into an Azure Cosmos DB database using Kotlin and coroutines. The project includes functions for clearing the container and asynchronously inserting data while measuring execution time.
+This project demonstrates how to perform batch insertion of data into an Azure Cosmos DB database using Kotlin and coroutines. It includes functionalities for clearing the container, inserting data asynchronously in batches, and measuring performance through execution time and throughput.
 
 ## Execution Steps
 
-1. Connect to the Cosmos DB database using the provided environment variables.
-2. Clear the container of existing data.
+1. Connect to the Cosmos DB database using environment variables.
+2. Clear the container to remove existing data.
 3. Batch insert data into the container.
-4. Clear the container again after data insertion.
+4. Retrieve the total item count in the container.
+5. Clear the container again after data insertion for cleanup.
 
 ## Required Resources
 
@@ -21,19 +22,21 @@ This project demonstrates how to perform batch insertion of data into an Azure C
 
 The following environment variables need to be set to run the project:
 
-- `COSMOS_URL`: The URL to connect to your Cosmos DB account.
+- `COSMOS_URL`: The URL for connecting to your Cosmos DB account.
 - `COSMOS_KEY`: The access key for your Cosmos DB account.
 - `DATABASE_NAME`: The name of the database (default is "ToDoList").
 - `CONTAINER_NAME`: The name of the container (default is "Items").
+- `RECORD_QUANTITY`: Total number of records to insert (default is 1000).
+- `BATCH_SIZE`: Number of records per batch (default is 100, max is 100).
 
 ## Dependencies
 
-The project uses the following dependencies:
+This project uses the following dependencies:
 
-- Kotlin: version 2.0.21
-- Azure Cosmos SDK: version 4.64.0
-- Kotlin Coroutines: version 1.7.3
-- Logback Classic: version 1.2.11
+- **Kotlin**: version 2.0.21
+- **Azure Cosmos SDK**: version 4.64.0
+- **Kotlin Coroutines**: version 1.7.3
+- **Logback Classic**: version 1.2.11
 
 ## Installation and Running
 
@@ -48,16 +51,32 @@ The project uses the following dependencies:
     docker build -t cosmos-batch-insertion .
     ```
 
-3. Run the container:
+3. Run the container with the required environment variables:
     ```sh
-    docker run --rm -e COSMOS_URL=<your_cosmos_url> -e COSMOS_KEY=<your_cosmos_key> -e DATABASE_NAME=<database_name> -e CONTAINER_NAME=<container_name> cosmos-batch-insertion
+    docker run --rm \
+        -e COSMOS_URL=<your_cosmos_url> \
+        -e COSMOS_KEY=<your_cosmos_key> \
+        -e DATABASE_NAME=<database_name> \
+        -e CONTAINER_NAME=<container_name> \
+        -e RECORD_QUANTITY=1000 \
+        -e BATCH_SIZE=100 \
+        cosmos-batch-insertion
     ```
 
 ## Usage Example
 
-The project inserts 1000 records into the Cosmos DB container in batches of 100 records and measures the total execution time.
+The default execution inserts 1000 records into the Cosmos DB container in batches of 100 records and measures the total execution time, reporting throughput (TPS).
+
+### Sample Output
+
+- **Total Insert Batch Operations:** Number of processed batches.
+- **Total Time:** Execution time in milliseconds.
+- **TPS:** Throughput in terms of transactions per second.
+- **Container Item Count:** Total items in the container after insertion.
+
+### Example Code Execution
 
 ```kotlin
 fun main() {
-    writeAndClearDataConcurrently(1000, 100) // 1000 records, in batches of 100
+    writeAndClearDataConcurrently(1000, 100) // Inserts 1000 records in batches of 100
 }
