@@ -24,8 +24,8 @@ The following environment variables need to be set to run the project:
 
 - `COSMOS_URL`: The URL for connecting to your Cosmos DB account.
 - `COSMOS_KEY`: The access key for your Cosmos DB account.
-- `DATABASE_NAME`: The name of the database (default is "ToDoList").
-- `CONTAINER_NAME`: The name of the container (default is "Items").
+- `DATABASE_NAME`: The name of the database.
+- `CONTAINER_NAME`: The name of the container.
 - `RECORD_QUANTITY`: Total number of records to insert (default is 1000).
 - `BATCH_SIZE`: Number of records per batch (default is 100, max is 100).
 
