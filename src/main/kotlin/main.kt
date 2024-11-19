@@ -26,9 +26,13 @@ val container = database.getContainer(CONTAINER_NAME)
 // Data model
 data class AccountData(
     val id: String = UUID.randomUUID().toString(),
-    val account: String = UUID.randomUUID().toString(),
+    val account: String = "9ac25829-0152-426b-91ef-492d799bece9",
     val balance: Double = Random.nextDouble(1000.0, 5000.0),
-    val time: Long = System.currentTimeMillis()
+    val description: String = "This is a description of the document",
+    val time: Long = System.currentTimeMillis(),
+    val timec: Long = System.currentTimeMillis(),
+    val pid: String = UUID.randomUUID().toString(),
+    val randomValue: Int = Random.nextInt(-10000, 10001),
 )
 
 // Function to generate a single record
@@ -89,7 +93,7 @@ suspend fun getItemCount(): Int {
 }
 
 // Asynchronous writing and clearing
-fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking {
+fun writeData(numRecords: Int, batchSize: Int) = runBlocking {
     val items = (0 until numRecords).map { generateRandomData() }
 
     clearContainer()
@@ -118,5 +122,5 @@ fun writeAndClearDataConcurrently(numRecords: Int, batchSize: Int) = runBlocking
 
 // Main function
 fun main() {
-    writeAndClearDataConcurrently(recordQuantity, batchSize)
+    writeData(recordQuantity, batchSize)
 }
