@@ -1,6 +1,8 @@
 import com.azure.cosmos.*
 import com.azure.cosmos.models.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.*
 import kotlin.random.Random
 import kotlin.system.measureTimeMillis
@@ -25,7 +27,7 @@ val container = database.getContainer(CONTAINER_NAME)
 // Data model
 data class AccountData(
     val id: String = UUID.randomUUID().toString(),
-    val account: String = "9ac25829-0152-426b-91ef-492d799bece9",
+    val account: String = UUID.randomUUID().toString(),
     val balance: Double = Random.nextDouble(1000.0, 5000.0),
     val description: String = "This is a description of the document",
     val time: Long = System.currentTimeMillis(),
@@ -56,58 +58,34 @@ suspend fun insertItemsBatch(batch: List<AccountData>): Boolean {
     }
 }
 
-// Clearing the container
-suspend fun clearContainer() {
-    println("Preparing for container cleaning. It will take 1-2 minutes.")
-    try {
-        val query = "SELECT * FROM c"
-        val items = container.queryItems(query, CosmosQueryRequestOptions(), Map::class.java)
-        items.forEach { item ->
-            container.deleteItem(item["id"] as String, PartitionKey(item["account"] as String), CosmosItemRequestOptions())
-        }
-        println("Container cleared successfully.")
-    } catch (e: Exception) {
-        println("Failed to clear container due to error: ${e.message}")
-    }
-}
-
-// Main function for continuous insertion and TPS calculation
-fun calculateTPS(batchSize: Int) = runBlocking {
-    // clearContainer()
-
-    var totalCount = 0
-    val startTime = System.currentTimeMillis()
-    val duration = 60 * 1000 // 1 minute in milliseconds
-    val semaphore = Semaphore(10)
-
-    println("Starting continuous data insertion for 1 minute...")
-    // val deferredResults = mutableListOf<Deferred<Boolean>>()
+// Main function for writing 100,000 records
+fun writeRecords(totalRecords: Int, batchSize: Int) = runBlocking {
+    val semaphore = Semaphore(100) // Limit to 100 concurrent tasks
     val deferredResults = mutableListOf<Deferred<Int>>()
 
-    // Continuous insertion for 1 minute
-    while (System.currentTimeMillis() - startTime < duration) {
+    val startTime = System.currentTimeMillis()
+
+    // Generate and insert 100,000 records in parallel batches
+    for (i in 0 until totalRecords step batchSize) {
         val batch = (0 until batchSize).map { generateRandomData() }
-        deferredResults.add(async(Dispatchers.IO) {
-            if (insertItemsBatch(batch)) {
-                batch.size
-            } else {
-                0
-            }
-        })
+        semaphore.withPermit {
+            deferredResults.add(async(Dispatchers.IO) {
+                if (insertItemsBatch(batch)) batch.size else 0
+            })
+        }
     }
 
     // Wait for all asynchronous operations to complete
-    totalCount = deferredResults.awaitAll().sum()
+    val totalInserted = deferredResults.awaitAll().sum()
 
     val elapsedTime = System.currentTimeMillis() - startTime
-    val tps = totalCount / (elapsedTime / 1000.0)
     println("Insertion completed.")
-    println("Total records inserted: $totalCount")
+    println("Total records inserted: $totalInserted")
     println("Elapsed time: $elapsedTime ms")
-    println("TPS: $tps")
+    println("TPS: ${totalInserted / (elapsedTime / 1000.0)}")
 }
 
 // Main function
 fun main() {
-    calculateTPS(batchSize)
+    writeRecords(totalRecords = 100_000, batchSize = batchSize)
 }
