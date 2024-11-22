@@ -13,7 +13,7 @@ val CONTAINER_NAME: String = System.getenv("CONTAINER_NAME") ?: "demo"
 val recordQuantity = System.getenv("RECORD_QUANTITY")?.toInt() ?: 5000
 val batchSize = System.getenv("BATCH_SIZE")?.toInt() ?: 100
 
-// Creating a client and connecting to the database and container
+// Creating a client and connecting to the database
 val cosmosClient = CosmosClientBuilder()
     .endpoint(COSMOS_URL)
     .key(COSMOS_KEY)
@@ -21,6 +21,7 @@ val cosmosClient = CosmosClientBuilder()
     .buildClient()
 
 val database = cosmosClient.getDatabase(DATABASE_NAME)
+lateinit var container: CosmosContainer // Объявляем контейнер как глобальную переменную
 
 // Data model
 data class AccountData(
@@ -61,21 +62,33 @@ suspend fun insertItemsBatch(batch: List<AccountData>): String {
 }
 
 // Creating the container
-suspend fun createContainer() {
-    println("Container is creating...")
-    database.createContainer(
-        CosmosContainerProperties(CONTAINER_NAME, "/account"),
-        ThroughputProperties.createManualThroughput(10000)
-    )
-    val containerProperties = container.read().properties
-    println("Container is ready: ${containerProperties.id}")
+suspend fun createContainerIfNotExists() {
+    try {
+        println("Checking if container exists...")
+        database.getContainer(CONTAINER_NAME).read()
+        println("Container already exists.")
+    } catch (e: Exception) {
+        println("Container does not exist. Creating container...")
+        database.createContainer(
+            CosmosContainerProperties(CONTAINER_NAME, "/account"),
+            ThroughputProperties.createManualThroughput(10000)
+        )
+        println("Container created successfully.")
+    }
+
+    // Инициализируем глобальный контейнер
+    container = database.getContainer(CONTAINER_NAME)
 }
 
 // Deleting the container
 suspend fun deleteContainer() {
-    println("Container is deleting...")
-    database.getContainer(CONTAINER_NAME).delete()
-    println("Container is deleted")
+    try {
+        println("Deleting container...")
+        database.getContainer(CONTAINER_NAME).delete()
+        println("Container deleted successfully.")
+    } catch (e: Exception) {
+        println("Failed to delete container: ${e.message}")
+    }
 }
 
 // Function to get item count in the container
@@ -96,7 +109,7 @@ suspend fun getItemCount(): Int {
 fun writeData(numRecords: Int, batchSize: Int) = runBlocking {
     val items = (0 until numRecords).map { generateRandomData() }
 
-    createContainer()
+    createContainerIfNotExists()
     var insertCount = 0
 
     val totalTimeMs = measureTimeMillis {
