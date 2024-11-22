@@ -10,7 +10,6 @@ This project demonstrates how to perform batch insertion of data into an Azure C
 2. Clear the container to remove existing data.
 3. Batch insert data into the container using the `AccountData` model.
 4. Retrieve the total item count in the container.
-5. Clear the container again after data insertion for cleanup.
 
 ## Data Model
 
@@ -27,9 +26,10 @@ The data being inserted is based on the `AccountData` model. This model includes
 
 ## Required Resources
 
-- Azure Cosmos DB account
-- Docker
+- Azure Cosmos DB account - [Manual Setup](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/quickstart-portal), [Script Setup])()
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - Internet connection to access Azure Cosmos DB
+- [Java Platform, Standard Edition 22](https://jdk.java.net/java-se-ri/22) - [Windows Download](https://download.java.net/openjdk/jdk22/ri/openjdk-22+36_windows-x64_bin.zip)
 
 ## Environment Variables
 
@@ -51,20 +51,41 @@ This project uses the following dependencies:
 - **Kotlin Coroutines**: version 1.7.3
 - **Logback Classic**: version 1.2.11
 
-## Installation and Running
+## Building and Run Locally with Gradle
 
-1. Clone the repository:
-    ```sh
-    git clone <your_repository_url>
-    cd <repository_name>
-    ```
+Clone the repository:
 
-2. Build the Docker image:
+```sh
+git clone <your_repository_url>
+cd <repository_name>
+```
+
+Build the project using gradlew:
+
+```sh
+gradlew build
+```  
+
+Run the project with the required environment variables:
+
+```sh
+COSMOS_URL=<your_cosmos_url> \
+COSMOS_KEY=<your_cosmos_key> \
+DATABASE_NAME=<database_name> \
+CONTAINER_NAME=<container_name> \
+RECORD_QUANTITY=1000 \
+BATCH_SIZE=100 \
+gradlew run
+```  
+
+## Running with Docker After Building
+
+1. Build the Docker image:
     ```sh
     docker build -t cosmos-batch-insertion .
     ```
 
-3. Run the container with the required environment variables:
+2. Run the container with the required environment variables:
     ```sh
     docker run --rm \
         -e COSMOS_URL=<your_cosmos_url> \
