@@ -1,8 +1,6 @@
 import com.azure.cosmos.*
 import com.azure.cosmos.models.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import java.util.*
 import kotlin.random.Random
 import kotlin.system.measureTimeMillis
@@ -12,6 +10,7 @@ val COSMOS_URL: String = System.getenv("COSMOS_URL") ?: throw IllegalArgumentExc
 val COSMOS_KEY: String = System.getenv("COSMOS_KEY") ?: throw IllegalArgumentException("COSMOS_KEY environment variable not set")
 val DATABASE_NAME: String = System.getenv("DATABASE_NAME") ?: throw IllegalArgumentException("DATABASE_NAME environment variable not set")
 val CONTAINER_NAME: String = System.getenv("CONTAINER_NAME") ?: throw IllegalArgumentException("CONTAINER_NAME environment variable not set")
+val recordQuantity = System.getenv("RECORD_QUANTITY")?.toInt() ?: 5000
 val batchSize = System.getenv("BATCH_SIZE")?.toInt() ?: 100
 
 // Creating a client and connecting to the database and container
@@ -27,7 +26,7 @@ val container = database.getContainer(CONTAINER_NAME)
 // Data model
 data class AccountData(
     val id: String = UUID.randomUUID().toString(),
-    val account: String = UUID.randomUUID().toString(),
+    val account: String = "9ac25829-0152-426b-91ef-492d799bece9",
     val balance: Double = Random.nextDouble(1000.0, 5000.0),
     val description: String = "This is a description of the document",
     val time: Long = System.currentTimeMillis(),
@@ -42,7 +41,7 @@ fun generateRandomData(): AccountData {
 }
 
 // Batch insertion of data
-suspend fun insertItemsBatch(batch: List<AccountData>): Boolean {
+suspend fun insertItemsBatch(batch: List<AccountData>): String {
     return try {
         val partitionKey = batch.first().account
 
@@ -52,40 +51,76 @@ suspend fun insertItemsBatch(batch: List<AccountData>): Boolean {
         }
 
         val response = container.executeCosmosBatch(transactionalBatch)
-        response.isSuccessStatusCode
+        if (response.isSuccessStatusCode) {
+            "Successfully inserted batch of size ${batch.size}"
+        } else {
+            "Failed to insert batch: ${response.statusCode} - ${response.errorMessage}"
+        }
     } catch (e: Exception) {
-        false
+        "Failed to insert batch due to error: ${e.message}"
     }
 }
 
-// Main function for writing 100,000 records
-fun writeRecords(totalRecords: Int, batchSize: Int) = runBlocking {
-    val semaphore = Semaphore(100) // Limit to 100 concurrent tasks
-    val deferredResults = mutableListOf<Deferred<Int>>()
+// Clearing the container
+suspend fun clearContainer() {
+    println("Preparing for container cleaning. It will take 1-2 minutes.")
+    var deletedCount = 0
+    try {
+        val query = "SELECT * FROM c"
+        val items = container.queryItems(query, CosmosQueryRequestOptions(), Map::class.java)
+        items.forEach { item ->
+            container.deleteItem(item["id"] as String, PartitionKey(item["account"] as String), CosmosItemRequestOptions())
+            deletedCount++
+        }
+        println("Container cleared successfully. Deleted $deletedCount items.")
+    } catch (e: Exception) {
+        println("Failed to clear container due to error: ${e.message}")
+    }
+}
 
-    val startTime = System.currentTimeMillis()
+// Function to get item count in the container
+suspend fun getItemCount(): Int {
+    return try {
+        val query = "SELECT VALUE COUNT(1) FROM c"
+        val countResult = container.queryItems(query, CosmosQueryRequestOptions(), Int::class.java)
+        val count = countResult.firstOrNull() ?: 0
+        println("Total items in container at the moment: $count")
+        count
+    } catch (e: Exception) {
+        println("Failed to get item count due to error: ${e.message}")
+        0
+    }
+}
 
-    // Generate and insert 100,000 records in parallel batches
-    for (i in 0 until totalRecords step batchSize) {
-        val batch = (0 until batchSize).map { generateRandomData() }
-        semaphore.withPermit {
-            deferredResults.add(async(Dispatchers.IO) {
-                if (insertItemsBatch(batch)) batch.size else 0
-            })
+// Asynchronous writing and clearing
+fun writeData(numRecords: Int, batchSize: Int) = runBlocking {
+    val items = (0 until numRecords).map { generateRandomData() }
+
+    clearContainer()
+    var insertCount = 0
+
+    val totalTimeMs = measureTimeMillis {
+        coroutineScope {
+            val batchJobs = items.chunked(batchSize).map { batch ->
+                async(Dispatchers.IO) {
+                    insertCount++
+                    insertItemsBatch(batch)
+                }
+            }
+            batchJobs.forEach { job -> println(job.await()) }
         }
     }
 
-    // Wait for all asynchronous operations to complete
-    val totalInserted = deferredResults.awaitAll().sum()
+    println("Total insert batch operations: $insertCount")
+    println("\nTotal time for inserting $numRecords records: $totalTimeMs ms")
 
-    val elapsedTime = System.currentTimeMillis() - startTime
-    println("Insertion completed.")
-    println("Total records inserted: $totalInserted")
-    println("Elapsed time: $elapsedTime ms")
-    println("TPS: ${totalInserted / (elapsedTime / 1000.0)}")
+    val itemsPerSecond = (numRecords / (totalTimeMs / 1000.0)).toInt()
+    println("TPS: $itemsPerSecond")
+
+    getItemCount()
 }
 
 // Main function
 fun main() {
-    writeRecords(totalRecords = 100_000, batchSize = batchSize)
+    writeData(recordQuantity, batchSize)
 }
