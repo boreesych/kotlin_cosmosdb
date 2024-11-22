@@ -110,7 +110,6 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
 
         val count = queryResponse?.results?.firstOrNull() ?: 0
 
-        println("Total items in container: $count")
         count
     } catch (e: Exception) {
         println("Failed to count items: ${e.message}")
@@ -124,11 +123,13 @@ fun main() = runBlocking {
         createContainerIfNotExists()
 
         val container = database.getContainer(CONTAINER_NAME)
+        val initialItemCount = getItemCount(container)
+        println("Total items in container after insertion: $initialItemCount")
+
 
         println("Starting data insertion...")
         writeData(container, RECORD_QUANTITY, BATCH_SIZE)
 
-        println("Counting items in container...")
         val itemCount = getItemCount(container)
         println("Total items in container after insertion: $itemCount")
     } catch (e: Exception) {
