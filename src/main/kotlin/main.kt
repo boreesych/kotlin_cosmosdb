@@ -10,9 +10,9 @@ val COSMOS_URL = System.getenv("COSMOS_URL") ?: throw IllegalArgumentException("
 val COSMOS_KEY = System.getenv("COSMOS_KEY") ?: throw IllegalArgumentException("COSMOS_KEY environment variable not set")
 val DATABASE_NAME = System.getenv("DATABASE_NAME") ?: throw IllegalArgumentException("DATABASE_NAME environment variable not set")
 val CONTAINER_NAME = System.getenv("CONTAINER_NAME") ?: "demo"
-val RU_VALUE = 10000
-val RECORD_QUANTITY = 5000
-val BATCH_SIZE = 100
+val RECORD_QUANTITY = System.getenv("RECORD_QUANTITY")?.toInt() ?: 1000
+val BATCH_SIZE = System.getenv("BATCH_SIZE")?.toInt() ?: 100
+val RU_VALUE = System.getenv("RU_VALUE")?.toInt() ?: 10000
 
 val cosmosClient = CosmosClientBuilder()
     .endpoint(COSMOS_URL)
