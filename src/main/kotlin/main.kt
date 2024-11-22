@@ -105,9 +105,10 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
 
         val queryResponse = container.queryItems(query, queryOptions, Int::class.java)
             .byPage()
-            .awaitSingle()
+            .toIterable()
+            .firstOrNull()
 
-        val count = queryResponse.results?.firstOrNull() ?: 0
+        val count = queryResponse?.results?.firstOrNull() ?: 0
 
         println("Total items in container: $count")
         count
@@ -138,9 +139,3 @@ fun main() = runBlocking {
         cosmosClient.close()
     }
 }
-
-// > Task :compileKotlin FAILED
-// e: file:///C:/Dev/New%20folder/src/main/kotlin/main.kt:108:14 Cannot infer type for this parameter. Please specify it explicitly.
-// e: file:///C:/Dev/New%20folder/src/main/kotlin/main.kt:108:14 Unresolved reference. None of the following candidates is applicable because of a receiver type mismatch:
-// suspend fun <T> Mono<T>.awaitSingle(): T
-// e: file:///C:/Dev/New%20folder/src/main/kotlin/main.kt:110:35 Unresolved reference 'results'.
