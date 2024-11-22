@@ -26,7 +26,7 @@ The data being inserted is based on the `AccountData` model. This model includes
 
 ## Required Resources
 
-- Azure Cosmos DB account - [Manual Setup](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/quickstart-portal), [Script Setup])()
+- Azure Cosmos DB account - [Manual Setup](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/quickstart-portal)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - Internet connection to access Azure Cosmos DB
 - [Java Platform, Standard Edition 22](https://jdk.java.net/java-se-ri/22) - [Windows Download](https://download.java.net/openjdk/jdk22/ri/openjdk-22+36_windows-x64_bin.zip)
@@ -41,6 +41,7 @@ The following environment variables need to be set to run the project:
 - `CONTAINER_NAME`: The name of the container.
 - `RECORD_QUANTITY`: Total number of records to insert (default is 1000).
 - `BATCH_SIZE`: Number of records per batch (default is 100, max is 100).
+- `RU_VALUE`: Provisioned RU/s for the Cosmos DB container (default is 10000).
 
 ## Dependencies
 
