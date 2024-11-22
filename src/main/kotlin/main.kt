@@ -11,11 +11,11 @@ val COSMOS_URL: String = System.getenv("COSMOS_URL") ?: throw IllegalArgumentExc
 val COSMOS_KEY: String = System.getenv("COSMOS_KEY") ?: throw IllegalArgumentException("COSMOS_KEY environment variable not set")
 val DATABASE_NAME: String = System.getenv("DATABASE_NAME") ?: throw IllegalArgumentException("DATABASE_NAME environment variable not set")
 val CONTAINER_NAME: String = System.getenv("CONTAINER_NAME") ?: "demo"
-val ruValue = System.getenv("RU_VALUE")?.toInt() ?: 10000
-val recordQuantity = System.getenv("RECORD_QUANTITY")?.toInt() ?: 5000
-val batchSize = System.getenv("BATCH_SIZE")?.toInt() ?: 100
+val RU_VALUE = 10000
+val RECORD_QUANTITY = 5000
+val BATCH_SIZE = 100
 
-// Creating a client and connecting to the database
+// Создание клиента Cosmos DB
 val cosmosClient = CosmosClientBuilder()
     .endpoint(COSMOS_URL)
     .key(COSMOS_KEY)
@@ -23,8 +23,6 @@ val cosmosClient = CosmosClientBuilder()
     .buildAsyncClient()
 
 val database = cosmosClient.getDatabase(DATABASE_NAME)
-// lateinit var container: CosmosAsyncContainer // Объявляем контейнер как глобальную переменную
-val container = database.getContainer(CONTAINER_NAME)
 
 // Data model
 data class AccountData(
@@ -43,11 +41,32 @@ fun generateRandomData(): AccountData {
     return AccountData()
 }
 
-// Batch insertion of data
-suspend fun insertItemsBatch(batch: List<AccountData>): String {
+// Function to create a container if it doesn't exist
+suspend fun createContainerIfNotExists() {
+    try {
+        val containerProperties = CosmosContainerProperties(CONTAINER_NAME, "/account")
+        val throughputProperties = ThroughputProperties.createManualThroughput(RU_VALUE)
+        database.createContainerIfNotExists(containerProperties, throughputProperties).awaitSingle()
+        println("Container '$CONTAINER_NAME' created or already exists.")
+    } catch (e: Exception) {
+        println("Failed to create container: ${e.message}")
+    }
+}
+
+// Function to delete the container
+suspend fun deleteContainer() {
+    try {
+        database.getContainer(CONTAINER_NAME).delete().awaitSingle()
+        println("Container '$CONTAINER_NAME' deleted successfully.")
+    } catch (e: Exception) {
+        println("Failed to delete container: ${e.message}")
+    }
+}
+
+// Function to insert items in batches
+suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<AccountData>): String {
     return try {
         val partitionKey = batch.first().account
-
         val transactionalBatch = CosmosBatch.createCosmosBatch(PartitionKey(partitionKey))
         batch.forEach { item ->
             transactionalBatch.createItemOperation(item)
@@ -64,70 +83,9 @@ suspend fun insertItemsBatch(batch: List<AccountData>): String {
     }
 }
 
-// Creating the container
-// suspend fun createContainerIfNotExists() {
-//     try {
-//         println("Checking if container exists...")
-//         database.getContainer(CONTAINER_NAME).read()
-//         println("Container already exists.")
-//     } catch (e: Exception) {
-//         println("Container does not exist. Creating container...")
-//         database.createItem(
-//             CosmosContainerProperties(CONTAINER_NAME, "/account"),
-//             ThroughputProperties.createManualThroughput(ruValue)
-//         )
-//         println("Container created successfully. RU: ${ruValue}")
-//     }
-
-//     // Инициализируем глобальный контейнер
-//     container = database.getContainer(CONTAINER_NAME)
-// }
-
-suspend fun createContainer(database: CosmosAsyncDatabase, containerName: String, partitionKeyPath: String) {
-    val containerProperties = CosmosContainerProperties(containerName, partitionKeyPath)
-    val throughputProperties = ThroughputProperties.createManualThroughput(400)
-
-    val containerResponse = database.createContainerIfNotExists(containerProperties, throughputProperties).awaitSingle()
-    println("Container created with id: ${containerResponse.properties.id}")
-}
-
-// Deleting the container
-suspend fun deleteContainer() {
-    try {
-        println("Deleting container...")
-        database.getContainer(CONTAINER_NAME).delete()
-        println("Container deleted successfully.")
-    } catch (e: Exception) {
-        println("Failed to delete container: ${e.message}")
-    }
-}
-
-// Function to get item count in the container
-// suspend fun getItemCount(): Int {
-//     return try {
-//         val query = "SELECT VALUE COUNT(1) FROM c"
-//         val countResult = container.queryItems(query, CosmosQueryRequestOptions(), Int::class.java)
-//             .byPage()
-//             .collectList()
-//             .awaitFirstOrNull()
-
-//         val count = countResult?.firstOrNull()?.results?.firstOrNull() ?: 0
-//         println("Total items in container at the moment: $count")
-//         count
-//     } catch (e: Exception) {
-//         println("Failed to get item count due to error: ${e.message}")
-//         0
-//     }
-// }
-
-
-// Asynchronous writing and clearing
-fun writeData(numRecords: Int, batchSize: Int) = runBlocking {
+// Function to write data in batches
+fun writeData(container: CosmosAsyncContainer, numRecords: Int, batchSize: Int) = runBlocking {
     val items = (0 until numRecords).map { generateRandomData() }
-
-    // createContainer()
-    // createContainerIfNotExists()
-    // getItemCount()
 
     var insertCount = 0
 
@@ -136,7 +94,7 @@ fun writeData(numRecords: Int, batchSize: Int) = runBlocking {
             val batchJobs = items.chunked(batchSize).map { batch ->
                 async(Dispatchers.IO) {
                     insertCount++
-                    insertItemsBatch(batch)
+                    insertItemsBatch(container, batch)
                 }
             }
             batchJobs.forEach { job -> println(job.await()) }
@@ -148,12 +106,47 @@ fun writeData(numRecords: Int, batchSize: Int) = runBlocking {
 
     val itemsPerSecond = (numRecords / (totalTimeMs / 1000.0)).toInt()
     println("TPS: $itemsPerSecond")
+}
 
-    // getItemCount()
-    // deleteContainer()
+// Function to count items in the container
+suspend fun getItemCount(container: CosmosAsyncContainer): Int {
+    return try {
+        val query = "SELECT VALUE COUNT(1) FROM c"
+        val queryOptions = CosmosQueryRequestOptions()
+
+        val count = container.queryItems(query, queryOptions, Int::class.java)
+            .byPage()
+            .awaitSingle()
+            .results
+            .firstOrNull() ?: 0
+
+        println("Total items in container: $count")
+        count
+    } catch (e: Exception) {
+        println("Failed to count items: ${e.message}")
+        0
+    }
 }
 
 // Main function
-fun main() {
-    writeData(recordQuantity, batchSize)
+fun main() = runBlocking {
+    try {
+        println("Creating container...")
+        createContainerIfNotExists()
+
+        val container = database.getContainer(CONTAINER_NAME)
+
+        println("Starting data insertion...")
+        writeData(container, RECORD_QUANTITY, BATCH_SIZE)
+
+        println("Counting items in container...")
+        val itemCount = getItemCount(container)
+        println("Total items in container after insertion: $itemCount")
+    } catch (e: Exception) {
+        println("An error occurred: ${e.message}")
+    } finally {
+        println("Cleaning up...")
+        deleteContainer()
+        cosmosClient.close()
+    }
 }
