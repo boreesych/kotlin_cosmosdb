@@ -6,16 +6,14 @@ import java.util.*
 import kotlin.random.Random
 import kotlin.system.measureTimeMillis
 
-// Settings for connecting to Cosmos DB via environment variables
-val COSMOS_URL: String = System.getenv("COSMOS_URL") ?: throw IllegalArgumentException("COSMOS_URL environment variable not set")
-val COSMOS_KEY: String = System.getenv("COSMOS_KEY") ?: throw IllegalArgumentException("COSMOS_KEY environment variable not set")
-val DATABASE_NAME: String = System.getenv("DATABASE_NAME") ?: throw IllegalArgumentException("DATABASE_NAME environment variable not set")
-val CONTAINER_NAME: String = System.getenv("CONTAINER_NAME") ?: "demo"
+val COSMOS_URL = System.getenv("COSMOS_URL") ?: throw IllegalArgumentException("COSMOS_URL environment variable not set")
+val COSMOS_KEY = System.getenv("COSMOS_KEY") ?: throw IllegalArgumentException("COSMOS_KEY environment variable not set")
+val DATABASE_NAME = System.getenv("DATABASE_NAME") ?: throw IllegalArgumentException("DATABASE_NAME environment variable not set")
+val CONTAINER_NAME = System.getenv("CONTAINER_NAME") ?: "demo"
 val RU_VALUE = 10000
 val RECORD_QUANTITY = 5000
 val BATCH_SIZE = 100
 
-// Создание клиента Cosmos DB
 val cosmosClient = CosmosClientBuilder()
     .endpoint(COSMOS_URL)
     .key(COSMOS_KEY)
@@ -24,7 +22,6 @@ val cosmosClient = CosmosClientBuilder()
 
 val database = cosmosClient.getDatabase(DATABASE_NAME)
 
-// Data model
 data class AccountData(
     val id: String = UUID.randomUUID().toString(),
     val account: String = "9ac25829-0152-426b-91ef-492d799bece9",
@@ -36,12 +33,8 @@ data class AccountData(
     val randomValue: Int = Random.nextInt(-10000, 10001),
 )
 
-// Function to generate a single record
-fun generateRandomData(): AccountData {
-    return AccountData()
-}
+fun generateRandomData(): AccountData = AccountData()
 
-// Function to create a container if it doesn't exist
 suspend fun createContainerIfNotExists() {
     try {
         val containerProperties = CosmosContainerProperties(CONTAINER_NAME, "/account")
@@ -53,7 +46,6 @@ suspend fun createContainerIfNotExists() {
     }
 }
 
-// Function to delete the container
 suspend fun deleteContainer() {
     try {
         database.getContainer(CONTAINER_NAME).delete().awaitSingle()
@@ -63,7 +55,6 @@ suspend fun deleteContainer() {
     }
 }
 
-// Function to insert items in batches
 suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<AccountData>): String {
     return try {
         val partitionKey = batch.first().account
@@ -83,7 +74,6 @@ suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<Accoun
     }
 }
 
-// Function to write data in batches
 fun writeData(container: CosmosAsyncContainer, numRecords: Int, batchSize: Int) = runBlocking {
     val items = (0 until numRecords).map { generateRandomData() }
 
@@ -108,17 +98,16 @@ fun writeData(container: CosmosAsyncContainer, numRecords: Int, batchSize: Int) 
     println("TPS: $itemsPerSecond")
 }
 
-// Function to count items in the container
 suspend fun getItemCount(container: CosmosAsyncContainer): Int {
     return try {
         val query = "SELECT VALUE COUNT(1) FROM c"
         val queryOptions = CosmosQueryRequestOptions()
 
-        val count = container.queryItems(query, queryOptions, Int::class.java)
+        val queryResponse = container.queryItems(query, queryOptions, Int::class.java)
             .byPage()
             .awaitSingle()
-            .results
-            .firstOrNull() ?: 0
+
+        val count = queryResponse.results?.firstOrNull() ?: 0
 
         println("Total items in container: $count")
         count
@@ -128,7 +117,6 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
     }
 }
 
-// Main function
 fun main() = runBlocking {
     try {
         println("Creating container...")
@@ -150,8 +138,3 @@ fun main() = runBlocking {
         cosmosClient.close()
     }
 }
-
-// e: file:///C:/Dev/New%20folder/src/main/kotlin/main.kt:119:14 Cannot infer type for this parameter. Please specify it explicitly.
-// e: file:///C:/Dev/New%20folder/src/main/kotlin/main.kt:119:14 Unresolved reference. None of the following candidates is applicable because of a receiver type mismatch:
-// suspend fun <T> Mono<T>.awaitSingle(): T
-// e: file:///C:/Dev/New%20folder/src/main/kotlin/main.kt:120:14 Unresolved reference 'results'.
