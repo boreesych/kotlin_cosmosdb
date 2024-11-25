@@ -74,30 +74,6 @@ suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<Accoun
     }
 }
 
-fun writeData(container: CosmosAsyncContainer, numRecords: Int, batchSize: Int) = runBlocking {
-    val items = (0 until numRecords).map { generateRandomData() }
-
-    var insertCount = 0
-
-    val totalTimeMs = measureTimeMillis {
-        coroutineScope {
-            val batchJobs = items.chunked(batchSize).map { batch ->
-                async(Dispatchers.IO) {
-                    insertCount++
-                    insertItemsBatch(container, batch)
-                }
-            }
-            batchJobs.forEach { job -> println(job.await()) }
-        }
-    }
-
-    println("Total insert batch operations: $insertCount")
-    println("\nTotal time for inserting $numRecords records: $totalTimeMs ms")
-
-    val itemsPerSecond = (numRecords / (totalTimeMs / 1000.0)).toInt()
-    println("TPS: $itemsPerSecond")
-}
-
 suspend fun getItemCount(container: CosmosAsyncContainer): Int {
     return try {
         val query = "SELECT VALUE COUNT(1) FROM c"
@@ -117,6 +93,44 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
     }
 }
 
+fun writeData(container: CosmosAsyncContainer, numRecords: Int, batchSize: Int) = runBlocking {
+    val items = (0 until numRecords).map { generateRandomData() }
+    val tpsValues = mutableListOf<Int>()
+    var insertedRecords = 0
+
+    val totalTimeMs = measureTimeMillis {
+        coroutineScope {
+            items.chunked(batchSize).chunked(1000 / batchSize).forEachIndexed { chunkIndex, batchGroup ->
+                val chunkTimeMs = measureTimeMillis {
+                    val batchJobs = batchGroup.map { batch ->
+                        async(Dispatchers.IO) {
+                            insertItemsBatch(container, batch)
+                        }
+                    }
+                    batchJobs.forEach { job -> println(job.await()) }
+                }
+                val chunkTps = (1000 / (chunkTimeMs / 1000.0)).toInt()
+                tpsValues.add(chunkTps)
+                println("TPS for batch ${chunkIndex + 1}: $chunkTps")
+                insertedRecords += 1000
+            }
+        }
+    }
+
+    println("Total records inserted: $insertedRecords")
+    println("Total time for inserting $numRecords records: $totalTimeMs ms")
+
+    val totalTps = (numRecords / (totalTimeMs / 1000.0)).toInt()
+    val minTps = tpsValues.minOrNull() ?: 0
+    val maxTps = tpsValues.maxOrNull() ?: 0
+    val avgTps = if (tpsValues.isNotEmpty()) tpsValues.sum() / tpsValues.size else 0
+
+    println("Overall TPS: $totalTps")
+    println("Min TPS: $minTps")
+    println("Max TPS: $maxTps")
+    println("Avg TPS: $avgTps")
+}
+
 fun main() = runBlocking {
     try {
         println("Creating container...")
@@ -124,14 +138,19 @@ fun main() = runBlocking {
 
         val container = database.getContainer(CONTAINER_NAME)
         val initialItemCount = getItemCount(container)
-        println("Total items in container after insertion: $initialItemCount")
-
+        println("Total items in container before insertion: $initialItemCount")
 
         println("Starting data insertion...")
-        writeData(container, RECORD_QUANTITY, BATCH_SIZE)
+        writeData(container, 50000, 25)
 
         val itemCount = getItemCount(container)
         println("Total items in container after insertion: $itemCount")
+
+        if (itemCount == initialItemCount + 50000) {
+            println("Data insertion verified: $itemCount items present as expected.")
+        } else {
+            println("Discrepancy in data insertion: expected ${initialItemCount + 50000}, but found $itemCount.")
+        }
     } catch (e: Exception) {
         println("An error occurred: ${e.message}")
     } finally {
