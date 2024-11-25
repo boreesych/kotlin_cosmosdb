@@ -93,34 +93,6 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
     }
 }
 
-suspend fun disableIndexing(container: CosmosAsyncContainer) {
-    try {
-        val properties = container.read().awaitSingle().properties
-        val indexingPolicy = properties.indexingPolicy
-
-        // Устанавливаем режим индексации в NONE
-        indexingPolicy.indexingMode = IndexingMode.NONE
-        container.replace(properties).awaitSingle()
-        println("Indexing disabled for container: ${container.id}")
-    } catch (e: Exception) {
-        println("Failed to disable indexing: ${e.message}")
-    }
-}
-
-suspend fun enableIndexing(container: CosmosAsyncContainer) {
-    try {
-        val properties = container.read().awaitSingle().properties
-        val indexingPolicy = properties.indexingPolicy
-
-        // Устанавливаем режим индексации обратно в CONSISTENT
-        indexingPolicy.indexingMode = IndexingMode.CONSISTENT
-        container.replace(properties).awaitSingle()
-        println("Indexing enabled for container: ${container.id}")
-    } catch (e: Exception) {
-        println("Failed to enable indexing: ${e.message}")
-    }
-}
-
 fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int) = runBlocking {
     val tpsValues = mutableListOf<Int>()
     var insertedRecords = 0
@@ -162,12 +134,10 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
     println("Total records inserted: $insertedRecords")
     println("Total time for inserting $totalRecords records: $totalTimeMs ms (includes generation time)")
 
-    val totalTps = (totalRecords / (tpsValues.sum().toDouble() / tpsValues.size)).toInt()
     val minTps = tpsValues.minOrNull() ?: 0
     val maxTps = tpsValues.maxOrNull() ?: 0
     val avgTps = if (tpsValues.isNotEmpty()) tpsValues.sum() / tpsValues.size else 0
 
-    println("Overall TPS (based on write operations): $totalTps")
     println("Min TPS: $minTps")
     println("Max TPS: $maxTps")
     println("Avg TPS: $avgTps")
@@ -182,14 +152,8 @@ fun main() = runBlocking {
         val initialItemCount = getItemCount(container)
         println("Total items in container before insertion: $initialItemCount")
 
-        println("Disabling indexing...")
-        disableIndexing(container)
-
         println("Starting data insertion...")
         writeData(container, RECORD_QUANTITY, BATCH_SIZE)
-
-        println("Enabling indexing...")
-        enableIndexing(container)
 
         val itemCount = getItemCount(container)
         println("Total items in container after insertion: $itemCount")
