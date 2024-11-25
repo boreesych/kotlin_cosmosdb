@@ -40,7 +40,6 @@ suspend fun createContainerIfNotExists() {
         val containerProperties = CosmosContainerProperties(CONTAINER_NAME, "/account")
         val throughputProperties = ThroughputProperties.createManualThroughput(RU_VALUE)
         database.createContainerIfNotExists(containerProperties, throughputProperties).awaitSingle()
-        println("Container '$CONTAINER_NAME' created or already exists.")
     } catch (e: Exception) {
         println("Failed to create container: ${e.message}")
     }
@@ -49,28 +48,21 @@ suspend fun createContainerIfNotExists() {
 suspend fun deleteContainer() {
     try {
         database.getContainer(CONTAINER_NAME).delete().awaitSingle()
-        println("Container '$CONTAINER_NAME' deleted successfully.")
     } catch (e: Exception) {
         println("Failed to delete container: ${e.message}")
     }
 }
 
-suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<AccountData>): String {
-    return try {
+suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<AccountData>) {
+    try {
         val partitionKey = batch.first().account
         val transactionalBatch = CosmosBatch.createCosmosBatch(PartitionKey(partitionKey))
         batch.forEach { item ->
             transactionalBatch.createItemOperation(item)
         }
-
-        val response = container.executeCosmosBatch(transactionalBatch).awaitSingle()
-        if (response.isSuccessStatusCode) {
-            "Successfully inserted batch of size ${batch.size}"
-        } else {
-            "Failed to insert batch: ${response.statusCode} - ${response.errorMessage}"
-        }
+        container.executeCosmosBatch(transactionalBatch).awaitSingle()
     } catch (e: Exception) {
-        "Failed to insert batch due to error: ${e.message}"
+        throw RuntimeException("Failed to insert batch due to error: ${e.message}")
     }
 }
 
@@ -84,9 +76,7 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
             .toIterable()
             .firstOrNull()
 
-        val count = queryResponse?.results?.firstOrNull() ?: 0
-
-        count
+        queryResponse?.results?.firstOrNull() ?: 0
     } catch (e: Exception) {
         println("Failed to count items: ${e.message}")
         0
@@ -101,14 +91,10 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
         coroutineScope {
             var remainingRecords = totalRecords
             while (remainingRecords > 0) {
-                // Генерация данных для текущей большой партии
                 val currentLargeBatchSize = minOf(1000, remainingRecords)
                 val largeBatch = (0 until currentLargeBatchSize).map { generateRandomData() }
-
-                // Разделение на подгруппы по batchSize
                 val subBatches = largeBatch.chunked(batchSize)
 
-                // Запуск корутин для каждой подгруппы
                 val writeTimeMs = measureTimeMillis {
                     val batchResults = subBatches.map { subBatch ->
                         async(Dispatchers.IO) {
@@ -116,14 +102,12 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
                         }
                     }
 
-                    // Ожидание завершения всех корутин
-                    batchResults.forEach { println(it.await()) }
+                    batchResults.forEach { it.await() }
                 }
 
                 val totalBatchSize = subBatches.sumOf { it.size }
                 val batchTps = (totalBatchSize / (writeTimeMs / 1000.0)).toInt()
                 tpsValues.add(batchTps)
-                println("TPS for current large batch: $batchTps")
 
                 remainingRecords -= currentLargeBatchSize
                 insertedRecords += currentLargeBatchSize
@@ -131,42 +115,30 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
         }
     }
 
-    println("Total records inserted: $insertedRecords")
-    println("Total time for inserting $totalRecords records: $totalTimeMs ms (includes generation time)")
-
     val minTps = tpsValues.minOrNull() ?: 0
     val maxTps = tpsValues.maxOrNull() ?: 0
     val avgTps = if (tpsValues.isNotEmpty()) tpsValues.sum() / tpsValues.size else 0
 
-    println("Min TPS: $minTps")
-    println("Max TPS: $maxTps")
-    println("Avg TPS: $avgTps")
+    println("Total time: $totalTimeMs ms")
+    println("Min TPS: $minTps, Max TPS: $maxTps, Avg TPS: $avgTps")
 }
 
 fun main() = runBlocking {
     try {
-        println("Creating container...")
         createContainerIfNotExists()
 
         val container = database.getContainer(CONTAINER_NAME)
         val initialItemCount = getItemCount(container)
-        println("Total items in container before insertion: $initialItemCount")
 
-        println("Starting data insertion...")
         writeData(container, RECORD_QUANTITY, BATCH_SIZE)
 
         val itemCount = getItemCount(container)
-        println("Total items in container after insertion: $itemCount")
-
-        if (itemCount == initialItemCount + RECORD_QUANTITY) {
-            println("Data insertion verified: $itemCount items present as expected.")
-        } else {
+        if (itemCount != initialItemCount + RECORD_QUANTITY) {
             println("Discrepancy in data insertion: expected ${initialItemCount + RECORD_QUANTITY}, but found $itemCount.")
         }
     } catch (e: Exception) {
         println("An error occurred: ${e.message}")
     } finally {
-        println("Cleaning up...")
         deleteContainer()
         cosmosClient.close()
     }
