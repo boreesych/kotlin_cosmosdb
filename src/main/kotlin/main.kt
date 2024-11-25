@@ -40,6 +40,7 @@ suspend fun createContainerIfNotExists() {
         val containerProperties = CosmosContainerProperties(CONTAINER_NAME, "/account")
         val throughputProperties = ThroughputProperties.createManualThroughput(RU_VALUE)
         database.createContainerIfNotExists(containerProperties, throughputProperties).awaitSingle()
+        println("Container '$CONTAINER_NAME' created or already exists.")
     } catch (e: Exception) {
         println("Failed to create container: ${e.message}")
     }
@@ -48,6 +49,7 @@ suspend fun createContainerIfNotExists() {
 suspend fun deleteContainer() {
     try {
         database.getContainer(CONTAINER_NAME).delete().awaitSingle()
+        println("Container '$CONTAINER_NAME' deleted successfully.")
     } catch (e: Exception) {
         println("Failed to delete container: ${e.message}")
     }
@@ -109,6 +111,7 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
                 val batchTps = (totalBatchSize / (writeTimeMs / 1000.0)).toInt()
                 tpsValues.add(batchTps)
 
+                println("Inserted $currentLargeBatchSize records in $writeTimeMs ms (TPS: $batchTps)")
                 remainingRecords -= currentLargeBatchSize
                 insertedRecords += currentLargeBatchSize
             }
@@ -119,26 +122,35 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
     val maxTps = tpsValues.maxOrNull() ?: 0
     val avgTps = if (tpsValues.isNotEmpty()) tpsValues.sum() / tpsValues.size else 0
 
+    println("Total records inserted: $insertedRecords")
     println("Total time: $totalTimeMs ms")
     println("Min TPS: $minTps, Max TPS: $maxTps, Avg TPS: $avgTps")
 }
 
 fun main() = runBlocking {
     try {
+        println("Creating container...")
         createContainerIfNotExists()
 
         val container = database.getContainer(CONTAINER_NAME)
         val initialItemCount = getItemCount(container)
+        println("Total items in container before insertion: $initialItemCount")
 
+        println("Starting data insertion...")
         writeData(container, RECORD_QUANTITY, BATCH_SIZE)
 
         val itemCount = getItemCount(container)
-        if (itemCount != initialItemCount + RECORD_QUANTITY) {
+        println("Total items in container after insertion: $itemCount")
+
+        if (itemCount == initialItemCount + RECORD_QUANTITY) {
+            println("Data insertion verified: $itemCount items present as expected.")
+        } else {
             println("Discrepancy in data insertion: expected ${initialItemCount + RECORD_QUANTITY}, but found $itemCount.")
         }
     } catch (e: Exception) {
         println("An error occurred: ${e.message}")
     } finally {
+        println("Cleaning up...")
         deleteContainer()
         cosmosClient.close()
     }
