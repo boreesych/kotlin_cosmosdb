@@ -101,24 +101,32 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
         coroutineScope {
             var remainingRecords = totalRecords
             while (remainingRecords > 0) {
-                // Генерация данных для текущей партии
-                val currentBatchSize = minOf(batchSize, remainingRecords)
-                val batch = (0 until currentBatchSize).map { generateRandomData() }
+                // Генерация данных для текущей большой партии
+                val currentLargeBatchSize = minOf(1000, remainingRecords)
+                val largeBatch = (0 until currentLargeBatchSize).map { generateRandomData() }
 
-                // Замер времени только для записи
+                // Разделение на подгруппы по batchSize
+                val subBatches = largeBatch.chunked(batchSize)
+
+                // Запуск корутин для каждой подгруппы
                 val writeTimeMs = measureTimeMillis {
-                    val batchResult = async(Dispatchers.IO) {
-                        insertItemsBatch(container, batch)
+                    val batchResults = subBatches.map { subBatch ->
+                        async(Dispatchers.IO) {
+                            insertItemsBatch(container, subBatch)
+                        }
                     }
-                    println(batchResult.await())
+
+                    // Ожидание завершения всех корутин
+                    batchResults.forEach { println(it.await()) }
                 }
 
-                val batchTps = (batch.size / (writeTimeMs / 1000.0)).toInt()
+                val totalBatchSize = subBatches.sumOf { it.size }
+                val batchTps = (totalBatchSize / (writeTimeMs / 1000.0)).toInt()
                 tpsValues.add(batchTps)
-                println("TPS for current batch: $batchTps")
+                println("TPS for current large batch: $batchTps")
 
-                remainingRecords -= currentBatchSize
-                insertedRecords += currentBatchSize
+                remainingRecords -= currentLargeBatchSize
+                insertedRecords += currentLargeBatchSize
             }
         }
     }
