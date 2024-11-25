@@ -155,15 +155,15 @@ fun main() = runBlocking {
         println("Total items in container before insertion: $initialItemCount")
 
         println("Starting data insertion...")
-        writeData(container, 50000, 25)
+        writeData(container, RECORD_QUANTITY, BATCH_SIZE)
 
         val itemCount = getItemCount(container)
         println("Total items in container after insertion: $itemCount")
 
-        if (itemCount == initialItemCount + 50000) {
+        if (itemCount == initialItemCount + RECORD_QUANTITY) {
             println("Data insertion verified: $itemCount items present as expected.")
         } else {
-            println("Discrepancy in data insertion: expected ${initialItemCount + 50000}, but found $itemCount.")
+            println("Discrepancy in data insertion: expected ${initialItemCount + RECORD_QUANTITY}, but found $itemCount.")
         }
     } catch (e: Exception) {
         println("An error occurred: ${e.message}")
