@@ -93,39 +93,45 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
     }
 }
 
-fun writeData(container: CosmosAsyncContainer, numRecords: Int, batchSize: Int) = runBlocking {
-    val items = (0 until numRecords).map { generateRandomData() }
+fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int) = runBlocking {
     val tpsValues = mutableListOf<Int>()
     var insertedRecords = 0
 
     val totalTimeMs = measureTimeMillis {
         coroutineScope {
-            items.chunked(batchSize).chunked(1000 / batchSize).forEachIndexed { chunkIndex, batchGroup ->
-                val chunkTimeMs = measureTimeMillis {
-                    val batchJobs = batchGroup.map { batch ->
-                        async(Dispatchers.IO) {
-                            insertItemsBatch(container, batch)
-                        }
+            var remainingRecords = totalRecords
+            while (remainingRecords > 0) {
+                // Генерация данных для текущей партии
+                val currentBatchSize = minOf(batchSize, remainingRecords)
+                val batch = (0 until currentBatchSize).map { generateRandomData() }
+
+                // Замер времени только для записи
+                val writeTimeMs = measureTimeMillis {
+                    val batchResult = async(Dispatchers.IO) {
+                        insertItemsBatch(container, batch)
                     }
-                    batchJobs.forEach { job -> println(job.await()) }
+                    println(batchResult.await())
                 }
-                val chunkTps = (1000 / (chunkTimeMs / 1000.0)).toInt()
-                tpsValues.add(chunkTps)
-                println("TPS for batch ${chunkIndex + 1}: $chunkTps")
-                insertedRecords += 1000
+
+                val batchTps = (batch.size / (writeTimeMs / 1000.0)).toInt()
+                tpsValues.add(batchTps)
+                println("TPS for current batch: $batchTps")
+
+                remainingRecords -= currentBatchSize
+                insertedRecords += currentBatchSize
             }
         }
     }
 
     println("Total records inserted: $insertedRecords")
-    println("Total time for inserting $numRecords records: $totalTimeMs ms")
+    println("Total time for inserting $totalRecords records: $totalTimeMs ms (includes generation time)")
 
-    val totalTps = (numRecords / (totalTimeMs / 1000.0)).toInt()
+    val totalTps = (totalRecords / (tpsValues.sum().toDouble() / tpsValues.size)).toInt()
     val minTps = tpsValues.minOrNull() ?: 0
     val maxTps = tpsValues.maxOrNull() ?: 0
     val avgTps = if (tpsValues.isNotEmpty()) tpsValues.sum() / tpsValues.size else 0
 
-    println("Overall TPS: $totalTps")
+    println("Overall TPS (based on write operations): $totalTps")
     println("Min TPS: $minTps")
     println("Max TPS: $maxTps")
     println("Avg TPS: $avgTps")
