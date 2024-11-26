@@ -55,7 +55,7 @@ suspend fun deleteContainer() {
     }
 }
 
-suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<AccountData>) {
+suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<AccountData>, errorCounter: MutableMap<String, Int>) {
     try {
         val partitionKey = batch.first().account
         val transactionalBatch = CosmosBatch.createCosmosBatch(PartitionKey(partitionKey))
@@ -63,8 +63,12 @@ suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<Accoun
             transactionalBatch.createItemOperation(item)
         }
         container.executeCosmosBatch(transactionalBatch).awaitSingle()
+    } catch (e: CosmosException) {
+        val errorCode = e.statusCode.toString()
+        errorCounter[errorCode] = errorCounter.getOrDefault(errorCode, 0) + 1
+        println("Error occurred during batch insert: ${e.message} (StatusCode: $errorCode)")
     } catch (e: Exception) {
-        throw RuntimeException("Failed to insert batch due to error: ${e.message}")
+        println("Unexpected error during batch insert: ${e.message}")
     }
 }
 
@@ -87,6 +91,7 @@ suspend fun getItemCount(container: CosmosAsyncContainer): Int {
 
 fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int) = runBlocking {
     val tpsValues = mutableListOf<Int>()
+    val errorCounter = mutableMapOf<String, Int>()
     var insertedRecords = 0
 
     val totalTimeMs = measureTimeMillis {
@@ -100,7 +105,7 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
                 val writeTimeMs = measureTimeMillis {
                     val batchResults = subBatches.map { subBatch ->
                         async(Dispatchers.IO) {
-                            insertItemsBatch(container, subBatch)
+                            insertItemsBatch(container, subBatch, errorCounter)
                         }
                     }
 
@@ -125,6 +130,7 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
     println("Total records inserted: $insertedRecords")
     println("Total time: $totalTimeMs ms")
     println("Min TPS: $minTps, Max TPS: $maxTps, Avg TPS: $avgTps")
+    println("Error summary: $errorCounter")
 }
 
 fun main() = runBlocking {
