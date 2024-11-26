@@ -18,6 +18,7 @@ val cosmosClient = CosmosClientBuilder()
     .endpoint(COSMOS_URL)
     .key(COSMOS_KEY)
     .consistencyLevel(ConsistencyLevel.EVENTUAL)
+    .contentResponseOnWriteEnabled(false)
     .buildAsyncClient()
 
 val database = cosmosClient.getDatabase(DATABASE_NAME)
@@ -38,7 +39,8 @@ fun generateRandomData(): AccountData = AccountData()
 suspend fun createContainerIfNotExists() {
     try {
         val containerProperties = CosmosContainerProperties(CONTAINER_NAME, "/account")
-        val throughputProperties = ThroughputProperties.createManualThroughput(RU_VALUE)
+        val throughputProperties = ThroughputProperties.createAutoscaledThroughput(RU_VALUE)
+        // val throughputProperties = ThroughputProperties.createManualThroughput(RU_VALUE)
         database.createContainerIfNotExists(containerProperties, throughputProperties).awaitSingle()
         println("Container '$CONTAINER_NAME' created or already exists.")
     } catch (e: Exception) {
@@ -62,11 +64,11 @@ suspend fun insertItemsBatch(container: CosmosAsyncContainer, batch: List<Accoun
         batch.forEach { item ->
             transactionalBatch.createItemOperation(item)
         }
-        container.executeCosmosBatch(transactionalBatch).awaitSingle()
-    } catch (e: CosmosException) {
-        val errorCode = e.statusCode.toString()
-        errorCounter[errorCode] = errorCounter.getOrDefault(errorCode, 0) + 1
-        println("Error occurred during batch insert: ${e.message} (StatusCode: $errorCode)")
+        val response = container.executeCosmosBatch(transactionalBatch).awaitSingle()
+        if (!response.isSuccessStatusCode) {
+            val errorCode = response.statusCode.toString()
+            errorCounter[errorCode] = errorCounter.getOrDefault(errorCode, 0) + 1
+        }
     } catch (e: Exception) {
         println("Unexpected error during batch insert: ${e.message}")
     }
