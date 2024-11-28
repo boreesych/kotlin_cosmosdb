@@ -95,6 +95,7 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
     val tpsValues = mutableListOf<Int>()
     val errorCounter = mutableMapOf<String, Int>()
     var insertedRecords = 0
+    var totalWriteTimeMs = 0L // Переменная для учета времени записи
 
     val totalTimeMs = measureTimeMillis {
         coroutineScope {
@@ -114,6 +115,8 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
                     batchResults.forEach { it.await() }
                 }
 
+                totalWriteTimeMs += writeTimeMs // Накопление времени записи
+
                 val totalBatchSize = subBatches.sumOf { it.size }
                 val batchTps = (totalBatchSize / (writeTimeMs / 1000.0)).toInt()
                 tpsValues.add(batchTps)
@@ -131,6 +134,8 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
 
     println("Total records inserted: $insertedRecords")
     println("Total time: $totalTimeMs ms")
+    println("Total write time: $totalWriteTimeMs ms") // Вывод времени записи
+    println("Proportion of write time to total time: ${"%.2f".format(totalWriteTimeMs * 100.0 / totalTimeMs)}%") // Пропорция
     println("Min TPS: $minTps, Max TPS: $maxTps, Avg TPS: $avgTps")
     println("Error summary: $errorCounter")
 }
