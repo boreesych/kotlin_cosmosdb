@@ -37,6 +37,18 @@ fun validateEnvironmentVariables() {
     if (RU_VALUE <= 0) {
         throw IllegalArgumentException("RU_VALUE must be greater than 0")
     }
+
+    if (BUFFER < 0) {
+        throw IllegalArgumentException("BUFFER must not be negative")
+    }
+
+    if (BUFFER > RECORD_QUANTITY) {
+        throw IllegalArgumentException("BUFFER must not be greater than RECORD_QUANTITY")
+    }
+
+    if (BATCH_SIZE > BUFFER) {
+        throw IllegalArgumentException("BATCH_SIZE must not be greater than BUFFER")
+    }
 }
 
 suspend fun databaseExists(client: CosmosAsyncClient, databaseName: String): Boolean {
