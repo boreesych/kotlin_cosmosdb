@@ -23,6 +23,20 @@ val cosmosClient = CosmosClientBuilder()
 
 val database = cosmosClient.getDatabase(DATABASE_NAME)
 
+fun validateEnvironmentVariables() {
+    if (RECORD_QUANTITY <= 0) {
+        throw IllegalArgumentException("RECORD_QUANTITY must be greater than 0")
+    }
+
+    if (BATCH_SIZE <= 0 || BATCH_SIZE > RECORD_QUANTITY || BATCH_SIZE > 100) {
+        throw IllegalArgumentException("BATCH_SIZE must be greater than 0, less than or equal to RECORD_QUANTITY, and less than or equal to 100")
+    }
+
+    if (RU_VALUE <= 0) {
+        throw IllegalArgumentException("RU_VALUE must be greater than 0")
+    }
+}
+
 data class AccountData(
     val id: String = UUID.randomUUID().toString(),
     val account: String = "9ac25829-0152-426b-91ef-492d799bece9",
@@ -142,6 +156,9 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
 
 fun main() = runBlocking {
     try {
+        validateEnvironmentVariables()
+        println("All environment variables are valid")
+        
         println("Creating container...")
         createContainerIfNotExists()
 
