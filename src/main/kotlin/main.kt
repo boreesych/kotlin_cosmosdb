@@ -10,9 +10,11 @@ val COSMOS_URL = System.getenv("COSMOS_URL") ?: throw IllegalArgumentException("
 val COSMOS_KEY = System.getenv("COSMOS_KEY") ?: throw IllegalArgumentException("COSMOS_KEY environment variable not set")
 val DATABASE_NAME = System.getenv("DATABASE_NAME") ?: throw IllegalArgumentException("DATABASE_NAME environment variable not set")
 val CONTAINER_NAME = System.getenv("CONTAINER_NAME") ?: "demo"
+val P_KEY = System.getenv("P_KEY") ?: "/account"
 val RECORD_QUANTITY = System.getenv("RECORD_QUANTITY")?.toInt() ?: 1000
 val BATCH_SIZE = System.getenv("BATCH_SIZE")?.toInt() ?: 100
 val RU_VALUE = System.getenv("RU_VALUE")?.toInt() ?: 10000
+val BUFFER = System.getenv("BUFFER")?.toInt() ?: 1000
 
 val cosmosClient = CosmosClientBuilder()
     .endpoint(COSMOS_URL)
@@ -52,7 +54,7 @@ fun generateRandomData(): AccountData = AccountData()
 
 suspend fun createContainerIfNotExists() {
     try {
-        val containerProperties = CosmosContainerProperties(CONTAINER_NAME, "/account")
+        val containerProperties = CosmosContainerProperties(CONTAINER_NAME, P_KEY)
         val throughputProperties = ThroughputProperties.createAutoscaledThroughput(RU_VALUE)
         // val throughputProperties = ThroughputProperties.createManualThroughput(RU_VALUE)
         database.createContainerIfNotExists(containerProperties, throughputProperties).awaitSingle()
@@ -115,7 +117,7 @@ fun writeData(container: CosmosAsyncContainer, totalRecords: Int, batchSize: Int
         coroutineScope {
             var remainingRecords = totalRecords
             while (remainingRecords > 0) {
-                val currentLargeBatchSize = minOf(1000, remainingRecords)
+                val currentLargeBatchSize = minOf(BUFFER, remainingRecords)
                 val largeBatch = (0 until currentLargeBatchSize).map { generateRandomData() }
                 val subBatches = largeBatch.chunked(batchSize)
 
