@@ -39,6 +39,19 @@ fun validateEnvironmentVariables() {
     }
 }
 
+suspend fun databaseExists(client: CosmosAsyncClient, databaseName: String): Boolean {
+    return try {
+        val databases = client.readAllDatabases()
+            .byPage()
+            .toIterable()
+            .flatMap { it.results }
+        databases.any { it.id == databaseName }
+    } catch (e: Exception) {
+        println("Failed to check if database exists: ${e.message}")
+        false
+    }
+}
+
 data class AccountData(
     val id: String = UUID.randomUUID().toString(),
     val account: String = "9ac25829-0152-426b-91ef-492d799bece9",
@@ -160,6 +173,13 @@ fun main() = runBlocking {
     try {
         validateEnvironmentVariables()
         println("All environment variables are valid")
+
+        println("Checking if database exists...")
+        val databaseExists = databaseExists(cosmosClient, DATABASE_NAME)
+        if (!databaseExists) {
+            println("Database '$DATABASE_NAME' does not exist. Please create it before running the program.")
+            return@runBlocking
+        }
         
         println("Creating container...")
         createContainerIfNotExists()
